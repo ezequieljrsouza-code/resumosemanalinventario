@@ -1,0 +1,818 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Resumo de Inventário Semanal</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══ THEME VARIABLES ═══ */
+:root {
+  --orange: #E8500A; --orange-light: #FF7235; --amber: #F5A623;
+  --green: #3ECF8E; --red: #FF5B5B; --blue: #4DA6FF;
+  --transition: 0.25s ease;
+}
+[data-theme="dark"] {
+  --bg: #0D0D0D; --surface: #161616; --surface2: #1F1F1F; --surface3: #2A2A2A;
+  --border: #2E2E2E; --text: #F0EDE8; --text-dim: #888; --text-muted: #444;
+  --header-bg: linear-gradient(135deg,#1A0A00 0%,#0D0D0D 60%);
+  --tooltip-bg: #1a1a1a; --tooltip-border: #3a3a3a;
+  --row-hover: rgba(255,255,255,0.04);
+  --heat1:#80c49a; --heat2:#5db87e; --heat3:#3dab63; --heat4:#1f9e4a;
+}
+[data-theme="light"] {
+  --bg: #F4F5F7; --surface: #FFFFFF; --surface2: #F0F1F4; --surface3: #E4E6EA;
+  --border: #DDE0E6; --text: #1A1A2E; --text-dim: #6B7280; --text-muted: #9CA3AF;
+  --header-bg: linear-gradient(135deg,#FFF3EE 0%,#FFFFFF 60%);
+  --tooltip-bg: #FFFFFF; --tooltip-border: #DDE0E6;
+  --row-hover: rgba(0,0,0,0.03);
+  --heat1:#2e7d52; --heat2:#1f6b43; --heat3:#145934; --heat4:#0a4726;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Syne', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; transition: background var(--transition), color var(--transition); }
+
+/* ═══ HEADER ═══ */
+.header {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 40px; display: flex; align-items: center; gap: 16px;
+  position: relative; overflow: hidden;
+  transition: background var(--transition), border-color var(--transition);
+}
+[data-theme="dark"] .header::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 100% at 0% 50%, rgba(232,80,10,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.header-icon {
+  width: 44px; height: 44px; background: var(--orange); border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+  flex-shrink: 0; box-shadow: 0 0 20px rgba(232,80,10,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.header-icon:hover { transform: scale(1.08) rotate(-4deg); box-shadow: 0 0 32px rgba(232,80,10,0.6); }
+.header-text h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; }
+.header-text p { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-family: 'DM Mono', monospace; }
+.header-spacer { flex: 1; }
+
+/* Header action buttons */
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; transition: all 0.2s; flex-shrink: 0;
+}
+.theme-btn:hover { background: var(--surface3); border-color: var(--orange); color: var(--orange-light); transform: scale(1.08); }
+.upload-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 15px; border-radius: 10px;
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+}
+.upload-btn:hover { background: var(--surface3); border-color: var(--orange); color: var(--orange-light); transform: translateY(-1px); }
+#file-input { display: none; }
+
+/* Firebase status pill */
+.fb-status {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 20px;
+  background: var(--surface2); border: 1px solid var(--border);
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
+  transition: all 0.3s;
+}
+.fb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); transition: background 0.3s; }
+.fb-status.connected .fb-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.fb-status.saving .fb-dot { background: var(--amber); animation: pulse 0.8s infinite; }
+.fb-status.error .fb-dot { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ═══ CONTROLS ═══ */
+.controls {
+  padding: 12px 40px; display: flex; align-items: center; gap: 14px;
+  border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap;
+  transition: background var(--transition), border-color var(--transition);
+}
+.controls > label { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
+.week-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.week-tab {
+  padding: 6px 14px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text-dim); font-family: 'DM Mono', monospace;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.week-tab:hover { border-color: var(--orange); color: var(--orange-light); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(232,80,10,0.2); }
+.week-tab.active { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: 700; box-shadow: 0 3px 12px rgba(232,80,10,0.4); }
+.upload-hint { margin-left: auto; font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+/* ═══ MAIN ═══ */
+.main { padding: 26px 40px 52px; }
+
+/* ═══ KPI CARDS ═══ */
+.kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px 22px 16px; position: relative; overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s, background var(--transition);
+  cursor: default;
+}
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 16px 16px 0 0; }
+.kpi-card::after {
+  content: ''; position: absolute; inset: 0; opacity: 0;
+  transition: opacity 0.3s; pointer-events: none; border-radius: 16px;
+}
+.kpi-card:hover { transform: translateY(-3px); }
+.kpi-card:hover::after { opacity: 1; }
+.kpi-card.total::before { background: linear-gradient(90deg, var(--orange), var(--amber)); }
+.kpi-card.total:hover { border-color: var(--amber); box-shadow: 0 8px 28px rgba(245,166,35,0.15); }
+.kpi-card.total::after { background: radial-gradient(ellipse at top, rgba(245,166,35,0.06) 0%, transparent 70%); }
+.kpi-card.verif::before { background: var(--green); }
+.kpi-card.verif:hover { border-color: var(--green); box-shadow: 0 8px 28px rgba(62,207,142,0.15); }
+.kpi-card.verif::after { background: radial-gradient(ellipse at top, rgba(62,207,142,0.06) 0%, transparent 70%); }
+.kpi-card.pend::before { background: var(--red); }
+.kpi-card.pend:hover { border-color: var(--red); box-shadow: 0 8px 28px rgba(255,91,91,0.15); }
+.kpi-card.pend::after { background: radial-gradient(ellipse at top, rgba(255,91,91,0.06) 0%, transparent 70%); }
+.kpi-card.acur::before { background: var(--blue); }
+.kpi-card.acur:hover { border-color: var(--blue); box-shadow: 0 8px 28px rgba(77,166,255,0.15); }
+.kpi-card.acur::after { background: radial-gradient(ellipse at top, rgba(77,166,255,0.06) 0%, transparent 70%); }
+.kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.3px; color: var(--text-dim); margin-bottom: 7px; font-family: Arial, sans-serif; }
+.kpi-value { font-size: 44px; font-weight: 800; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; font-family: Arial, sans-serif; transition: transform 0.2s; }
+.kpi-card:hover .kpi-value { transform: scale(1.02); }
+.kpi-card.total .kpi-value { color: var(--amber); }
+.kpi-card.verif .kpi-value { color: var(--green); }
+.kpi-card.pend  .kpi-value { color: var(--red); }
+.kpi-card.acur  .kpi-value { color: var(--blue); font-size: 40px; }
+.kpi-sub { display: flex; align-items: baseline; gap: 7px; margin-top: 5px; }
+.kpi-pct { font-size: 19px; font-weight: 700; font-family: Arial, sans-serif; }
+.kpi-card.verif .kpi-pct { color: var(--green); opacity: 0.6; }
+.kpi-card.pend  .kpi-pct { color: var(--red);   opacity: 0.6; }
+.kpi-card.total .kpi-pct { color: var(--amber);  opacity: 0.6; }
+.kpi-card.acur  .kpi-pct { color: var(--blue);   opacity: 0.6; }
+.kpi-desc { font-size: 11px; color: var(--text-muted); font-family: Arial, sans-serif; }
+.kpi-bar { height: 4px; background: var(--surface3); border-radius: 3px; margin-top: 13px; overflow: hidden; }
+.kpi-bar-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+.kpi-card.verif .kpi-bar-fill { background: var(--green); }
+.kpi-card.pend  .kpi-bar-fill { background: var(--red); }
+.kpi-card.total .kpi-bar-fill { background: linear-gradient(90deg,var(--orange),var(--amber)); width:100% !important; }
+.kpi-card.acur  .kpi-bar-fill { background: var(--blue); }
+
+/* ═══ SECTION TITLE ═══ */
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.section-title span { display: inline-block; width: 16px; height: 3px; border-radius: 2px; background: var(--orange); }
+
+/* ═══ TABLES ═══ */
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 20px; transition: background var(--transition), border-color var(--transition); }
+.table-header-bar { padding: 11px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.table-badge { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+.badge-summary { background: rgba(232,80,10,0.15); color: var(--orange-light); }
+.badge-verif   { background: rgba(62,207,142,0.12);  color: var(--green); }
+.badge-pend    { background: rgba(255,91,91,0.12);   color: var(--red); }
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; min-width: 700px; border-collapse: collapse; font-family: 'DM Mono', monospace; font-size: 13px; }
+th { background: var(--surface2); color: var(--text-dim); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; padding: 9px 14px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; min-width: 72px; transition: background var(--transition); }
+th:first-child { text-align: left; min-width: 130px; }
+th.total-col { min-width: 80px; }
+td { padding: 8px 14px; text-align: right; border-bottom: 1px solid rgba(128,128,128,0.08); font-size: 13px; font-weight: 700; position: relative; transition: background 0.12s; white-space: nowrap; min-width: 72px; }
+td:first-child { text-align: left; color: var(--text-dim); font-weight: 500; min-width: 130px; }
+tr:last-child td { border-bottom: none; }
+tr.total-row td { background: var(--surface2); font-weight: 700; color: var(--text); border-top: 1px solid var(--border); }
+tbody tr:not(.total-row) { cursor: default; }
+tbody tr:not(.total-row):hover td { background: var(--row-hover); }
+tbody tr:not(.total-row):hover td:first-child { color: var(--text); }
+td.total-col { color: var(--amber); font-weight: 700; }
+tr.total-row td.total-col { color: var(--orange-light); }
+
+/* CELL TOOLTIP */
+td[data-tip] { cursor: default; }
+td[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  background: var(--tooltip-bg); border: 1px solid var(--tooltip-border);
+  color: var(--text); font-size: 11px; font-weight: 600;
+  padding: 6px 11px; border-radius: 8px; white-space: nowrap;
+  pointer-events: none; z-index: 200;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  font-family: 'DM Mono', monospace;
+}
+td[data-tip]:hover::before {
+  content: '';
+  position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--tooltip-border);
+  pointer-events: none; z-index: 201;
+}
+
+/* HEAT */
+[data-theme="dark"] .heat-1 { color: #80c49a; }
+[data-theme="dark"] .heat-2 { color: #5db87e; }
+[data-theme="dark"] .heat-3 { color: #3dab63; }
+[data-theme="dark"] .heat-4 { color: #1f9e4a; }
+[data-theme="dark"] .heat-5 { color: var(--green); font-weight: 700; }
+[data-theme="light"] .heat-1 { color: #1a6b3e; }
+[data-theme="light"] .heat-2 { color: #145c34; }
+[data-theme="light"] .heat-3 { color: #0e4d2a; }
+[data-theme="light"] .heat-4 { color: #083e20; }
+[data-theme="light"] .heat-5 { color: #042f18; font-weight: 700; }
+
+/* ═══ CHARTS ═══ */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 18px 22px; overflow: visible;
+  transition: background var(--transition), border-color var(--transition), box-shadow 0.2s;
+}
+.chart-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+.chart-card h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 14px; font-family: 'DM Mono', monospace; }
+
+/* HORIZ BAR */
+.bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-label { font-size: 11px; color: var(--text-dim); width: 106px; flex-shrink: 0; text-align: right; font-family: 'DM Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color 0.15s; }
+.bar-row:hover .bar-label { color: var(--text); }
+.bar-outer { flex: 1; display: flex; align-items: center; height: 24px; }
+.bar-track { flex: 1; background: var(--surface3); border-radius: 5px; height: 100%; overflow: hidden; position: relative; transition: background var(--transition); }
+.bar-fill { height: 100%; border-radius: 5px; transition: width 0.6s cubic-bezier(.4,0,.2,1), filter 0.15s; display: flex; align-items: center; justify-content: flex-end; padding-right: 7px; }
+.bar-fill.v { background: linear-gradient(90deg,#1b6e48,var(--green)); }
+.bar-fill.p { background: linear-gradient(90deg,#7a1f1f,var(--red)); }
+.bar-row:hover .bar-fill { filter: brightness(1.1); }
+.bar-num-inside  { font-size: 11px; font-weight: 700; color: rgba(0,0,0,0.8); white-space: nowrap; font-family: 'DM Mono', monospace; }
+.bar-num-outside { font-size: 11px; font-weight: 700; color: var(--text-dim); white-space: nowrap; font-family: 'DM Mono', monospace; margin-left: 8px; flex-shrink: 0; min-width: 44px; transition: color 0.15s; }
+.bar-row:hover .bar-num-outside { color: var(--text); }
+
+/* DAY BAR CHART — redesigned robust version */
+.legend { display: flex; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+.leg-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+/* Chart wrapper with y-axis gutter */
+.day-chart-outer {
+  position: relative;
+  padding-top: 8px;
+}
+
+/* Grid lines */
+.day-chart-grid {
+  position: absolute;
+  left: 0; right: 0;
+  top: 8px;
+  height: 160px; /* matches BAR_ZONE height */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 0;
+}
+.grid-line {
+  width: 100%; height: 1px;
+  background: var(--border);
+  opacity: 0.55;
+}
+.grid-line:last-child { opacity: 0.9; } /* baseline stronger */
+
+.day-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 220px; /* taller total area */
+  padding-top: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+.day-col {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; position: relative; overflow: visible; cursor: pointer;
+  /* push content to bottom: val-labels → bars → label */
+  justify-content: flex-end;
+}
+
+/* Value labels above bars — fixed area */
+.day-val-labels {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  margin-bottom: 6px;
+  min-height: 38px;
+  justify-content: flex-end;
+}
+.day-val-v {
+  font-size: 10px; font-weight: 700; color: var(--green);
+  font-family: 'DM Mono', monospace; line-height: 1.3; white-space: nowrap;
+  background: rgba(62,207,142,0.1); padding: 1px 5px; border-radius: 3px;
+}
+.day-val-p {
+  font-size: 10px; font-weight: 700; color: var(--red);
+  font-family: 'DM Mono', monospace; line-height: 1.3; white-space: nowrap;
+  background: rgba(255,91,91,0.1); padding: 1px 5px; border-radius: 3px;
+}
+.day-val-total {
+  font-size: 9px; font-weight: 700; color: var(--amber);
+  font-family: 'DM Mono', monospace; line-height: 1.3; white-space: nowrap;
+  margin-top: 1px;
+}
+
+.day-bar-group {
+  display: flex; gap: 3px; align-items: flex-end;
+  width: 85%;
+}
+.day-bar {
+  flex: 1; border-radius: 4px 4px 0 0;
+  transition: height 0.6s cubic-bezier(.4,0,.2,1), filter 0.15s, transform 0.15s;
+  min-height: 3px;
+  position: relative;
+}
+.day-bar.v {
+  background: linear-gradient(180deg, var(--green) 0%, rgba(62,207,142,0.55) 100%);
+  box-shadow: 0 0 8px rgba(62,207,142,0.2);
+}
+.day-bar.p {
+  background: linear-gradient(180deg, var(--red) 0%, rgba(255,91,91,0.45) 100%);
+  box-shadow: 0 0 8px rgba(255,91,91,0.15);
+}
+.day-col:hover .day-bar { filter: brightness(1.18); transform: scaleX(1.04); }
+.day-col:hover .day-bar.v { box-shadow: 0 0 16px rgba(62,207,142,0.4); }
+.day-col:hover .day-bar.p { box-shadow: 0 0 16px rgba(255,91,91,0.35); }
+
+/* Axis baseline */
+.day-axis-line {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin-bottom: 0;
+  border-radius: 1px;
+}
+
+.day-label {
+  font-size: 10px; color: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+  margin-top: 7px; text-align: center;
+  transition: color 0.15s;
+  line-height: 1.35;
+}
+.day-col:hover .day-label { color: var(--text-dim); }
+
+/* Hover tooltip */
+.day-col:hover .day-total-tip { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.day-total-tip {
+  opacity: 0; transition: opacity 0.15s, transform 0.15s;
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: var(--tooltip-bg); border: 1px solid var(--tooltip-border);
+  border-radius: 8px; padding: 5px 10px; white-space: nowrap;
+  font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700;
+  pointer-events: none; z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+  color: var(--amber);
+}
+.day-total-tip::after {
+  content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--tooltip-border);
+}
+
+/* ═══ ANALYST TAG ═══ */
+.analyst-tag {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; color: var(--text);
+  font-family: 'DM Mono', monospace; letter-spacing: 0.2px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-left: 3px solid var(--orange);
+  padding: 6px 14px; border-radius: 8px;
+  flex-shrink: 0;
+  transition: background var(--transition), border-color var(--transition);
+}
+.analyst-tag svg { color: var(--orange); flex-shrink: 0; }
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 900px) {
+  .header,.controls,.main { padding-left: 16px; padding-right: 16px; }
+  .kpi-row { grid-template-columns: repeat(2,1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .kpi-row { grid-template-columns: 1fr; }
+  .kpi-value { font-size: 36px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-icon">📦</div>
+  <div class="header-text">
+    <h1>Resumo de Inventário Semanal</h1>
+    <p>Quantidade total por status · Zonas · Dias da semana</p>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-actions">
+    <div class="analyst-tag">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Analista: Ezequiel Miranda
+    </div>
+    <div class="fb-status" id="fb-status">
+      <div class="fb-dot"></div>
+      <span id="fb-label">Firebase</span>
+    </div>
+    <button class="theme-btn" id="theme-btn" title="Alternar tema">🌙</button>
+    <label class="upload-btn" for="file-input">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      Atualizar XLSX
+    </label>
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <label>Semana</label>
+  <div class="week-tabs" id="week-tabs"></div>
+  <div class="upload-hint" id="upload-hint">dados carregados ✓</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div id="dashboard"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ═══════════════════════════════════════
+   FIREBASE CONFIG
+═══════════════════════════════════════ */
+const FB_URL = 'https://resumosemanalinventario-default-rtdb.firebaseio.com';
+
+function fbSetStatus(state, msg) {
+  const el = document.getElementById('fb-status');
+  const lb = document.getElementById('fb-label');
+  el.className = 'fb-status ' + state;
+  lb.textContent = msg;
+}
+
+async function fbSave(data) {
+  fbSetStatus('saving', 'Salvando…');
+  try {
+    const res = await fetch(`${FB_URL}/weekData.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error(res.status);
+    fbSetStatus('connected', 'Salvo ✓');
+    setTimeout(() => fbSetStatus('connected', 'Firebase ✓'), 2500);
+  } catch(e) {
+    fbSetStatus('error', 'Erro ao salvar');
+    console.error('Firebase save error:', e);
+  }
+}
+
+async function fbLoad() {
+  fbSetStatus('saving', 'Carregando…');
+  try {
+    const res = await fetch(`${FB_URL}/weekData.json`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (data && Object.keys(data).length > 0) {
+      fbSetStatus('connected', 'Firebase ✓');
+      return data;
+    }
+    fbSetStatus('connected', 'Firebase ✓');
+    return null;
+  } catch(e) {
+    fbSetStatus('error', 'Offline');
+    console.error('Firebase load error:', e);
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════
+   THEME TOGGLE
+═══════════════════════════════════════ */
+const themeBtn = document.getElementById('theme-btn');
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  themeBtn.textContent = t === 'dark' ? '🌙' : '☀️';
+  localStorage.setItem('inv-theme', t);
+}
+themeBtn.onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+};
+// restore saved theme
+setTheme(localStorage.getItem('inv-theme') || 'dark');
+
+/* ═══════════════════════════════════════
+   EMBEDDED DATA
+═══════════════════════════════════════ */
+const EMBEDDED_DATA = {"W09":{"label":"W09 (02/03 – 07/03)","days":["Segunda-Feira","Terça-Feira","Quarta-Feira","Quinta-Feira","Sexta-Feira","Sábado"],"day_dates":{"Segunda-Feira":"02/03","Terça-Feira":"03/03","Quarta-Feira":"04/03","Quinta-Feira":"05/03","Sexta-Feira":"06/03","Sábado":"07/03"},"summary":{"VERIFICADOS":{"Segunda-Feira":3389,"Terça-Feira":4772,"Quarta-Feira":4347,"Quinta-Feira":4476,"Sexta-Feira":1565,"Sábado":4101,"TOTAL":22650},"PENDENTE":{"Segunda-Feira":914,"Terça-Feira":774,"Quarta-Feira":802,"Quinta-Feira":747,"Sexta-Feira":690,"Sábado":696,"TOTAL":4623},"TOTAL":{"Segunda-Feira":4303,"Terça-Feira":5546,"Quarta-Feira":5149,"Quinta-Feira":5223,"Sexta-Feira":2255,"Sábado":4797,"TOTAL":27273}},"verificados":{"Returns":{"Segunda-Feira":242,"Terça-Feira":485,"Quarta-Feira":576,"Quinta-Feira":131,"Sexta-Feira":216,"Sábado":396,"TOTAL":2046},"Fraude":{"Segunda-Feira":1,"Terça-Feira":1,"Quarta-Feira":2,"Quinta-Feira":2,"Sexta-Feira":3,"Sábado":0,"TOTAL":9},"Sorting":{"Segunda-Feira":3050,"Terça-Feira":4196,"Quarta-Feira":3721,"Quinta-Feira":4298,"Sexta-Feira":1237,"Sábado":3619,"TOTAL":20121},"Problem Solving":{"Segunda-Feira":78,"Terça-Feira":47,"Quarta-Feira":31,"Quinta-Feira":35,"Sexta-Feira":28,"Sábado":66,"TOTAL":285},"Missort":{"Segunda-Feira":7,"Terça-Feira":1,"Quarta-Feira":5,"Quinta-Feira":0,"Sexta-Feira":2,"Sábado":14,"TOTAL":29},"Damaged":{"Segunda-Feira":11,"Terça-Feira":42,"Quarta-Feira":10,"Quinta-Feira":8,"Sexta-Feira":16,"Sábado":5,"TOTAL":92},"Buffered":{"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":63,"Sábado":0,"TOTAL":63},"TOTAL":{"Segunda-Feira":3389,"Terça-Feira":4772,"Quarta-Feira":4345,"Quinta-Feira":4474,"Sexta-Feira":1565,"Sábado":4100,"TOTAL":22645}},"pendente":{"Returns":{"Segunda-Feira":157,"Terça-Feira":162,"Quarta-Feira":144,"Quinta-Feira":81,"Sexta-Feira":74,"Sábado":90,"TOTAL":708},"Fraude":{"Segunda-Feira":1,"Terça-Feira":1,"Quarta-Feira":1,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":3},"Sorting":{"Segunda-Feira":282,"Terça-Feira":166,"Quarta-Feira":173,"Quinta-Feira":190,"Sexta-Feira":78,"Sábado":109,"TOTAL":998},"Problem Solving":{"Segunda-Feira":472,"Terça-Feira":444,"Quarta-Feira":482,"Quinta-Feira":475,"Sexta-Feira":481,"Sábado":493,"TOTAL":2847},"Missort":{"Segunda-Feira":1,"Terça-Feira":0,"Quarta-Feira":1,"Quinta-Feira":0,"Sexta-Feira":2,"Sábado":1,"TOTAL":5},"Damaged":{"Segunda-Feira":1,"Terça-Feira":1,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":2},"Buffered":{"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":2,"Sábado":0,"TOTAL":2},"TOTAL":{"Segunda-Feira":914,"Terça-Feira":774,"Quarta-Feira":801,"Quinta-Feira":746,"Sexta-Feira":637,"Sábado":693,"TOTAL":4565}}},"W10":{"label":"W10 (08/03 – 14/03)","days":["Domingo","Segunda-Feira","Terça-Feira","Quarta-Feira","Quinta-Feira","Sexta-Feira","Sábado"],"day_dates":{"Domingo":"08/03","Segunda-Feira":"09/03","Terça-Feira":"10/03","Quarta-Feira":"11/03","Quinta-Feira":"12/03","Sexta-Feira":"13/03","Sábado":"14/03"},"summary":{"VERIFICADOS":{"Domingo":5750,"Segunda-Feira":1405,"Terça-Feira":1287,"Quarta-Feira":1118,"Quinta-Feira":1028,"Sexta-Feira":985,"Sábado":1932,"TOTAL":13505},"PENDENTE":{"Domingo":846,"Segunda-Feira":765,"Terça-Feira":579,"Quarta-Feira":568,"Quinta-Feira":603,"Sexta-Feira":584,"Sábado":656,"TOTAL":4601},"TOTAL":{"Domingo":6596,"Segunda-Feira":2170,"Terça-Feira":1866,"Quarta-Feira":1686,"Quinta-Feira":1631,"Sexta-Feira":1569,"Sábado":2588,"TOTAL":18106}},"verificados":{"Returns":{"Domingo":458,"Segunda-Feira":635,"Terça-Feira":798,"Quarta-Feira":805,"Quinta-Feira":137,"Sexta-Feira":214,"Sábado":66,"TOTAL":3113},"Fraude":{"Domingo":2,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":1,"Quinta-Feira":1,"Sexta-Feira":0,"Sábado":11,"TOTAL":15},"Sorting":{"Domingo":4024,"Segunda-Feira":689,"Terça-Feira":425,"Quarta-Feira":257,"Quinta-Feira":844,"Sexta-Feira":740,"Sábado":1290,"TOTAL":8269},"Problem Solving":{"Domingo":13,"Segunda-Feira":25,"Terça-Feira":39,"Quarta-Feira":36,"Quinta-Feira":35,"Sexta-Feira":24,"Sábado":53,"TOTAL":225},"Missort":{"Domingo":15,"Segunda-Feira":23,"Terça-Feira":3,"Quarta-Feira":3,"Quinta-Feira":7,"Sexta-Feira":2,"Sábado":7,"TOTAL":60},"Damaged":{"Domingo":35,"Segunda-Feira":33,"Terça-Feira":20,"Quarta-Feira":16,"Quinta-Feira":4,"Sexta-Feira":5,"Sábado":11,"TOTAL":124},"Buffered":{"Domingo":1201,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":494,"TOTAL":1695},"TOTAL":{"Domingo":5748,"Segunda-Feira":1405,"Terça-Feira":1285,"Quarta-Feira":1118,"Quinta-Feira":1028,"Sexta-Feira":985,"Sábado":1932,"TOTAL":13501}},"pendente":{"Returns":{"Domingo":73,"Segunda-Feira":64,"Terça-Feira":64,"Quarta-Feira":67,"Quinta-Feira":87,"Sexta-Feira":83,"Sábado":76,"TOTAL":514},"Fraude":{"Domingo":0,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":1,"Sexta-Feira":1,"Sábado":2,"TOTAL":4},"Sorting":{"Domingo":194,"Segunda-Feira":201,"Terça-Feira":88,"Quarta-Feira":76,"Quinta-Feira":126,"Sexta-Feira":72,"Sábado":126,"TOTAL":883},"Problem Solving":{"Domingo":540,"Segunda-Feira":500,"Terça-Feira":427,"Quarta-Feira":425,"Quinta-Feira":389,"Sexta-Feira":428,"Sábado":451,"TOTAL":3160},"Missort":{"Domingo":0,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":0},"Damaged":{"Domingo":0,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":0},"Buffered":{"Domingo":39,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":1,"TOTAL":40},"TOTAL":{"Domingo":846,"Segunda-Feira":765,"Terça-Feira":579,"Quarta-Feira":568,"Quinta-Feira":603,"Sexta-Feira":584,"Sábado":656,"TOTAL":4601}}},"W11":{"label":"W11 (15/03 – 21/03)","days":["Domingo","Segunda-Feira","Terça-Feira","Quarta-Feira","Quinta-Feira","Sexta-Feira","Sábado"],"day_dates":{"Domingo":"15/03","Segunda-Feira":"16/03","Terça-Feira":"17/03","Quarta-Feira":"18/03","Quinta-Feira":"19/03","Sexta-Feira":"20/03","Sábado":"21/03"},"summary":{"VERIFICADOS":{"Domingo":3217,"Segunda-Feira":883,"Terça-Feira":783,"Quarta-Feira":693,"Quinta-Feira":686,"Sexta-Feira":802,"Sábado":1558,"TOTAL":8622},"PENDENTE":{"Domingo":630,"Segunda-Feira":836,"Terça-Feira":832,"Quarta-Feira":573,"Quinta-Feira":510,"Sexta-Feira":576,"Sábado":512,"TOTAL":4469},"TOTAL":{"Domingo":3847,"Segunda-Feira":1719,"Terça-Feira":1615,"Quarta-Feira":1266,"Quinta-Feira":1196,"Sexta-Feira":1378,"Sábado":2070,"TOTAL":13091}},"verificados":{"Returns":{"Domingo":152,"Segunda-Feira":262,"Terça-Feira":256,"Quarta-Feira":240,"Quinta-Feira":12,"Sexta-Feira":57,"Sábado":18,"TOTAL":997},"Fraude":{"Domingo":1,"Segunda-Feira":3,"Terça-Feira":4,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":2,"Sábado":2,"TOTAL":12},"Sorting":{"Domingo":2942,"Segunda-Feira":529,"Terça-Feira":365,"Quarta-Feira":375,"Quinta-Feira":619,"Sexta-Feira":705,"Sábado":1467,"TOTAL":7002},"Problem Solving":{"Domingo":40,"Segunda-Feira":27,"Terça-Feira":134,"Quarta-Feira":65,"Quinta-Feira":53,"Sexta-Feira":11,"Sábado":49,"TOTAL":379},"Missort":{"Domingo":5,"Segunda-Feira":0,"Terça-Feira":2,"Quarta-Feira":1,"Quinta-Feira":0,"Sexta-Feira":18,"Sábado":2,"TOTAL":28},"Damaged":{"Domingo":2,"Segunda-Feira":43,"Terça-Feira":21,"Quarta-Feira":12,"Quinta-Feira":2,"Sexta-Feira":9,"Sábado":20,"TOTAL":109},"Buffered":{"Domingo":0,"Segunda-Feira":18,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":18},"TOTAL":{"Domingo":3142,"Segunda-Feira":882,"Terça-Feira":782,"Quarta-Feira":693,"Quinta-Feira":686,"Sexta-Feira":802,"Sábado":1558,"TOTAL":8545}},"pendente":{"Returns":{"Domingo":77,"Segunda-Feira":61,"Terça-Feira":63,"Quarta-Feira":64,"Quinta-Feira":58,"Sexta-Feira":57,"Sábado":13,"TOTAL":393},"Fraude":{"Domingo":2,"Segunda-Feira":2,"Terça-Feira":1,"Quarta-Feira":1,"Quinta-Feira":2,"Sexta-Feira":2,"Sábado":1,"TOTAL":11},"Sorting":{"Domingo":141,"Segunda-Feira":312,"Terça-Feira":335,"Quarta-Feira":132,"Quinta-Feira":105,"Sexta-Feira":113,"Sábado":99,"TOTAL":1237},"Problem Solving":{"Domingo":409,"Segunda-Feira":461,"Terça-Feira":433,"Quarta-Feira":375,"Quinta-Feira":345,"Sexta-Feira":402,"Sábado":398,"TOTAL":2823},"Missort":{"Domingo":1,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":1,"Quinta-Feira":0,"Sexta-Feira":2,"Sábado":1,"TOTAL":5},"Damaged":{"Domingo":0,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":0},"Buffered":{"Domingo":0,"Segunda-Feira":0,"Terça-Feira":0,"Quarta-Feira":0,"Quinta-Feira":0,"Sexta-Feira":0,"Sábado":0,"TOTAL":0},"TOTAL":{"Domingo":630,"Segunda-Feira":836,"Terça-Feira":832,"Quarta-Feira":573,"Quinta-Feira":510,"Sexta-Feira":576,"Sábado":512,"TOTAL":4469}}},"W12":{"label":"W12 (22/03 – 22/03)","days":["Domingo"],"day_dates":{"Domingo":"22/03"},"summary":{"VERIFICADOS":{"Domingo":2535,"TOTAL":2535},"PENDENTE":{"Domingo":510,"TOTAL":510},"TOTAL":{"Domingo":3045,"TOTAL":3045}},"verificados":{"Returns":{"Domingo":99,"TOTAL":99},"Fraude":{"Domingo":3,"TOTAL":3},"Sorting":{"Domingo":2108,"TOTAL":2108},"Problem Solving":{"Domingo":12,"TOTAL":12},"Missort":{"Domingo":0,"TOTAL":0},"Damaged":{"Domingo":14,"TOTAL":14},"Buffered":{"Domingo":299,"TOTAL":299},"TOTAL":{"Domingo":2535,"TOTAL":2535}},"pendente":{"Returns":{"Domingo":13,"TOTAL":13},"Fraude":{"Domingo":1,"TOTAL":1},"Sorting":{"Domingo":128,"TOTAL":128},"Problem Solving":{"Domingo":368,"TOTAL":368},"Missort":{"Domingo":0,"TOTAL":0},"Damaged":{"Domingo":0,"TOTAL":0},"Buffered":{"Domingo":0,"TOTAL":0},"TOTAL":{"Domingo":510,"TOTAL":510}}}};
+
+const DAYS_SHORT = {'Domingo':'Dom','Segunda-Feira':'Seg','Terça-Feira':'Ter','Quarta-Feira':'Qua','Quinta-Feira':'Qui','Sexta-Feira':'Sex','Sábado':'Sáb'};
+const ZONES = ['Returns','Fraude','Sorting','Problem Solving','Missort','Damaged','Buffered'];
+const DAYS_ORDER = ['Domingo','Segunda-Feira','Terça-Feira','Quarta-Feira','Quinta-Feira','Sexta-Feira','Sábado'];
+
+let weekData = EMBEDDED_DATA;
+let currentWeek = 'W11';
+
+function fmt(n) { return (n||0).toLocaleString('pt-BR'); }
+
+function heatClass(val, maxVal) {
+  if (!val || val===0) return '';
+  const r = val/maxVal;
+  if (r > 0.8) return 'heat-5';
+  if (r > 0.6) return 'heat-4';
+  if (r > 0.4) return 'heat-3';
+  if (r > 0.2) return 'heat-2';
+  return 'heat-1';
+}
+
+function buildTabs() {
+  const c = document.getElementById('week-tabs');
+  c.innerHTML = '';
+  Object.keys(weekData).forEach(wk => {
+    const t = document.createElement('div');
+    t.className = 'week-tab' + (wk===currentWeek?' active':'');
+    t.textContent = weekData[wk].label;
+    t.onclick = () => { currentWeek=wk; buildTabs(); renderDashboard(); };
+    c.appendChild(t);
+  });
+}
+
+function buildHorizBars(zones, maxVal, cls) {
+  return zones.map(z => {
+    const pct = maxVal > 0 ? Math.round(z.val/maxVal*100) : 0;
+    const inside = pct > 28;
+    return `
+      <div class="bar-row">
+        <div class="bar-label" title="${z.label}">${z.label}</div>
+        <div class="bar-outer">
+          <div class="bar-track">
+            <div class="bar-fill ${cls}" style="width:${Math.max(pct,0)}%">
+              ${inside ? `<span class="bar-num-inside">${fmt(z.val)}</span>` : ''}
+            </div>
+          </div>
+          ${!inside ? `<span class="bar-num-outside">${z.val>0?fmt(z.val):''}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function buildTable(title, badge, data, days, dayDates) {
+  const cols = [...days, 'TOTAL'];
+  const maxVal = Math.max(...ZONES.flatMap(z => days.map(d => data[z]?.[d]||0)), 1);
+  const headers = cols.map(d =>
+    d==='TOTAL'
+      ? `<th class="total-col">TOTAL</th>`
+      : `<th>${DAYS_SHORT[d]||d}<br><span style="color:var(--text-muted);font-size:9px;font-weight:400">${dayDates[d]||''}</span></th>`
+  ).join('');
+  const rows = ZONES.map(zone => {
+    const cells = cols.map(d => {
+      const v = data[zone]?.[d]||0;
+      if (d==='TOTAL') return `<td class="total-col" data-tip="Total ${zone}: ${fmt(v)}">${fmt(v)}</td>`;
+      const cls = heatClass(v, maxVal);
+      const ds = DAYS_SHORT[d]||d;
+      return `<td class="${cls}" data-tip="${zone} · ${ds} ${dayDates[d]||''}: ${fmt(v)}">${v>0?fmt(v):'—'}</td>`;
+    }).join('');
+    return `<tr><td>${zone}</td>${cells}</tr>`;
+  }).join('');
+  const totCells = cols.map(d => {
+    const v = data['TOTAL']?.[d]||0;
+    if (d==='TOTAL') return `<td class="total-col">${fmt(v)}</td>`;
+    return `<td data-tip="Total · ${DAYS_SHORT[d]||d} ${dayDates[d]||''}: ${fmt(v)}">${fmt(v)}</td>`;
+  }).join('');
+  return `
+    <div class="table-wrap">
+      <div class="table-header-bar">
+        <span class="table-badge ${badge}">${title}</span>
+        <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-left:6px">por zona · passe o mouse para detalhes</span>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Zona</th>${headers}</tr></thead>
+          <tbody>${rows}<tr class="total-row"><td>TOTAL</td>${totCells}</tr></tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function renderDashboard() {
+  const d = weekData[currentWeek];
+  if (!d) return;
+  const total = d.summary.TOTAL.TOTAL||0;
+  const verif = d.summary.VERIFICADOS.TOTAL||0;
+  const pend  = d.summary.PENDENTE.TOTAL||0;
+  const vPct  = total>0 ? (verif/total*100).toFixed(1) : '0,0';
+  const pPct  = total>0 ? (pend/total*100).toFixed(1)  : '0,0';
+  const acurPct = (verif+pend)>0 ? (verif/(verif+pend)*100).toFixed(1) : '0,0';
+  const days  = d.days;
+  const dayDates = d.day_dates;
+  const sumCols = [...days, 'TOTAL'];
+
+  // Summary table
+  const sumH = sumCols.map(c =>
+    c==='TOTAL' ? `<th class="total-col">TOTAL</th>`
+    : `<th>${DAYS_SHORT[c]||c}<br><span style="color:var(--text-muted);font-size:9px;font-weight:400">${dayDates[c]||''}</span></th>`
+  ).join('');
+  const sumRows = ['VERIFICADOS','PENDENTE'].map(st => {
+    const clr = st==='VERIFICADOS' ? 'var(--green)' : 'var(--red)';
+    const cells = sumCols.map(c => {
+      const v = d.summary[st]?.[c]||0;
+      const ds = DAYS_SHORT[c]||c;
+      if (c==='TOTAL') return `<td class="total-col" style="color:${clr};font-weight:700" data-tip="Total ${st}: ${fmt(v)}">${fmt(v)}</td>`;
+      return `<td style="color:${clr}" data-tip="${st} · ${ds} ${dayDates[c]||''}: ${fmt(v)}">${fmt(v)}</td>`;
+    }).join('');
+    return `<tr><td style="color:${clr};font-weight:700">${st}</td>${cells}</tr>`;
+  }).join('');
+  const totCells = sumCols.map(c => {
+    const v = d.summary.TOTAL?.[c]||0;
+    if (c==='TOTAL') return `<td class="total-col">${fmt(v)}</td>`;
+    return `<td data-tip="Total · ${DAYS_SHORT[c]||c} ${dayDates[c]||''}: ${fmt(v)}">${fmt(v)}</td>`;
+  }).join('');
+
+  // Zone bar chart
+  const verifZones = ZONES.map(z=>({label:z,val:d.verificados[z]?.TOTAL||0})).sort((a,b)=>b.val-a.val);
+  const maxV = verifZones[0]?.val||1;
+
+  // Day bar chart — redesigned with grid + taller bars
+  const dayMax = Math.max(...days.map(day=>d.summary.TOTAL?.[day]||0),1);
+  const BAR_HEIGHT = 150; // px available for bars (taller area)
+  const GRID_STEPS = 4;
+  // Build grid lines (evenly spaced)
+  const gridLines = Array.from({length: GRID_STEPS+1}, (_,i)=>`<div class="grid-line"></div>`).join('');
+
+  const dayBars = days.map(day => {
+    const v = d.summary.VERIFICADOS?.[day]||0;
+    const p = d.summary.PENDENTE?.[day]||0;
+    const t = v+p;
+    const h  = Math.max(Math.round((t/dayMax)*BAR_HEIGHT), 3);
+    const vH = t>0 ? Math.max(Math.round(h*v/t), v>0?3:0) : 0;
+    const pH = Math.max(h-vH, p>0?3:0);
+    return `
+      <div class="day-col">
+        <div class="day-total-tip">Σ ${fmt(t)}</div>
+        <div class="day-val-labels">
+          <span class="day-val-v">↑${fmt(v)}</span>
+          <span class="day-val-p">↓${fmt(p)}</span>
+        </div>
+        <div class="day-bar-group" style="height:${h}px;align-items:flex-end">
+          <div class="day-bar v" style="height:${vH}px"></div>
+          <div class="day-bar p" style="height:${pH}px"></div>
+        </div>
+        <div class="day-axis-line"></div>
+        <div class="day-label">${DAYS_SHORT[day]||day}<br><span style="font-size:9px;opacity:.6">${dayDates[day]||''}</span></div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('dashboard').innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card total">
+        <div class="kpi-label">Total da Semana</div>
+        <div class="kpi-value">${fmt(total)}</div>
+        <div class="kpi-sub"><span class="kpi-pct">100%</span><span class="kpi-desc">de todos os pacotes</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:100%"></div></div>
+      </div>
+      <div class="kpi-card verif">
+        <div class="kpi-label">Verificados</div>
+        <div class="kpi-value">${fmt(verif)}</div>
+        <div class="kpi-sub"><span class="kpi-pct">${vPct.replace('.',',')}%</span><span class="kpi-desc">do total</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${vPct}%"></div></div>
+      </div>
+      <div class="kpi-card pend">
+        <div class="kpi-label">Pendente</div>
+        <div class="kpi-value">${fmt(pend)}</div>
+        <div class="kpi-sub"><span class="kpi-pct">${pPct.replace('.',',')}%</span><span class="kpi-desc">do total</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pPct}%"></div></div>
+      </div>
+      <div class="kpi-card acur">
+        <div class="kpi-label">Acurácia</div>
+        <div class="kpi-value">${acurPct.replace('.',',')}%</div>
+        <div class="kpi-sub"><span class="kpi-desc" style="font-size:11px">Verificados ÷ (Verif + Pend)</span></div>
+        <div class="kpi-bar" style="margin-top:18px"><div class="kpi-bar-fill" style="width:${acurPct}%"></div></div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Verificados por Zona — Total Semanal</h3>
+        <div class="bar-chart">${buildHorizBars(verifZones,maxV,'v')}</div>
+      </div>
+      <div class="chart-card">
+        <h3>Evolução Diária — Verificados vs Pendente</h3>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>↑ Verificados</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>↓ Pendente</div>
+          <div class="leg-item" style="margin-left:auto;color:var(--amber);font-weight:700;font-size:11px;font-family:'DM Mono',monospace">Σ = Total por dia</div>
+        </div>
+        <div class="day-chart-outer">
+          <div class="day-chart-grid">${gridLines}</div>
+          <div class="day-chart">${dayBars}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title"><span></span>Quantidade Total por Status</div>
+    <div class="table-wrap" style="margin-bottom:20px">
+      <div class="table-header-bar">
+        <span class="table-badge badge-summary">RESUMO SEMANAL</span>
+        <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-left:6px">passe o mouse para detalhes</span>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Status</th>${sumH}</tr></thead>
+          <tbody>${sumRows}<tr class="total-row"><td>TOTAL</td>${totCells}</tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title"><span></span>Detalhamento por Zona</div>
+    ${buildTable('VERIFICADOS','badge-verif',d.verificados,days,dayDates)}
+    ${buildTable('PENDENTE','badge-pend',d.pendente,days,dayDates)}
+  `;
+}
+
+/* ═══════════════════════════════════════
+   XLSX UPLOAD + FIREBASE SAVE
+═══════════════════════════════════════ */
+document.getElementById('file-input').addEventListener('change', async e => {
+  const file = e.target.files[0]; if(!file) return;
+  document.getElementById('upload-hint').textContent = 'processando…';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf,{type:'array',cellDates:true});
+    if(!wb.SheetNames.includes('BASE')){ alert('Aba "BASE" não encontrada.'); return; }
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets['BASE'],{raw:false});
+    const ZONE_MAP={'Returns':'Returns','Bulky returns':'Returns','Fraude':'Fraude','Sorting':'Sorting','Problem Solving':'Problem Solving','Missort':'Missort','Damaged':'Damaged','Buffered':'Buffered'};
+    const rows = raw.map(r => {
+      let dt = r['DATA HISTÓRICO'];
+      if(typeof dt==='string'){ if(dt.includes('/')){ const p=dt.split('/'); if(p.length===3) dt=new Date(p[2],p[1]-1,p[0]); } else dt=new Date(dt); }
+      return {...r, _date:(dt instanceof Date&&!isNaN(dt))?dt:null};
+    }).filter(r=>r._date);
+
+    function getWeekSat(dt){ const d=new Date(dt),dts=(6-d.getDay()+7)%7,s=new Date(d); s.setDate(d.getDate()+dts); return s.toISOString().slice(0,10); }
+    function getISOWeek(dt){ const d=new Date(dt); d.setHours(0,0,0,0); d.setDate(d.getDate()+3-(d.getDay()+6)%7); const w1=new Date(d.getFullYear(),0,4); return 1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+    function fmtD(dt){ const d=new Date(dt); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
+
+    const weeksMap={};
+    rows.forEach(r=>{ const wk=getWeekSat(r._date); if(!weeksMap[wk]) weeksMap[wk]=[]; weeksMap[wk].push(r); });
+
+    const newData={};
+    Object.keys(weeksMap).sort().forEach(satStr=>{
+      const sat=new Date(satStr);
+      const wnum=String(getISOWeek(sat)).padStart(2,'0'), wKey=`W${wnum}`;
+      const wRows=weeksMap[satStr];
+      const present=[...new Set(wRows.map(r=>r['DIA DA SEMANA']))];
+      const orderedDays=DAYS_ORDER.filter(d=>present.includes(d));
+      const dayDts={};
+      orderedDays.forEach(d=>{ const r=wRows.find(row=>row['DIA DA SEMANA']===d); if(r) dayDts[d]=fmtD(r._date); });
+      const firstDate=dayDts[orderedDays[0]]||'';
+      const lastDate=dayDts[orderedDays[orderedDays.length-1]]||'';
+
+      function buildGroup(sv){
+        const sub=wRows.filter(r=>r['STATUS']===sv), tbl={};
+        ZONES.forEach(z=>{ const zR=sub.filter(r=>ZONE_MAP[r['Área']]===z), row={}; orderedDays.forEach(d=>{ row[d]=zR.filter(r=>r['DIA DA SEMANA']===d).length; }); row.TOTAL=Object.values(row).reduce((a,b)=>a+b,0); tbl[z]=row; });
+        const tot={}; orderedDays.forEach(d=>{ tot[d]=ZONES.reduce((a,z)=>a+(tbl[z][d]||0),0); }); tot.TOTAL=ZONES.reduce((a,z)=>a+(tbl[z].TOTAL||0),0); tbl.TOTAL=tot; return tbl;
+      }
+      const summary={};
+      [['VERIFICADOS','Verificados'],['PENDENTE','Pendente']].forEach(([sk,sv])=>{
+        const sub=wRows.filter(r=>r['STATUS']===sv), row={};
+        orderedDays.forEach(d=>{ row[d]=sub.filter(r=>r['DIA DA SEMANA']===d).length; });
+        row.TOTAL=Object.values(row).reduce((a,b)=>a+b,0); summary[sk]=row;
+      });
+      const totS={}; orderedDays.forEach(d=>{ totS[d]=(summary.VERIFICADOS[d]||0)+(summary.PENDENTE[d]||0); });
+      totS.TOTAL=(summary.VERIFICADOS.TOTAL||0)+(summary.PENDENTE.TOTAL||0); summary.TOTAL=totS;
+
+      newData[wKey]={ label:`W${wnum} (${firstDate} – ${lastDate})`, days:orderedDays, day_dates:dayDts, summary, verificados:buildGroup('Verificados'), pendente:buildGroup('Pendente') };
+    });
+
+    weekData = newData;
+    const wks = Object.keys(newData);
+    currentWeek = wks[Math.max(0, wks.length-2)];
+    document.getElementById('upload-hint').textContent = `${file.name} ✓`;
+    buildTabs(); renderDashboard();
+
+    // Save to Firebase
+    await fbSave(newData);
+
+  } catch(err) {
+    console.error(err);
+    document.getElementById('upload-hint').textContent = 'erro ao processar';
+    alert('Erro: '+err.message);
+  }
+  e.target.value='';
+});
+
+/* ═══════════════════════════════════════
+   INIT — try loading from Firebase first
+═══════════════════════════════════════ */
+(async () => {
+  const fbData = await fbLoad();
+  if (fbData) {
+    weekData = fbData;
+    const wks = Object.keys(fbData);
+    // Pick second-to-last week as default (most complete week)
+    currentWeek = wks[Math.max(0, wks.length-2)] || wks[wks.length-1];
+    document.getElementById('upload-hint').textContent = 'Carregado na Nuvem ✓';
+  }
+  buildTabs();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
